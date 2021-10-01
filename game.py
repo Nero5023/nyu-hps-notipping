@@ -4,9 +4,6 @@ import math
 import random
 
 
-G_CACHE = {}
-
-
 class Player(Enum):
     BLACK = 0
     WHITE = 1
@@ -24,68 +21,150 @@ class Player(Enum):
             return Player.WHITE
 
 
+def pos_2_idx(pos):
+    mid = NoTippingGame.BoardLen//2
+    return pos + mid
+
+
+def bit_to_1d_array(bit, size):
+    return np.array(list(reversed((("0" * size) + bin(bit)[2:])[-size:])), dtype=np.uint8)
+
+
 class NoTippingGame:
+    BoardLen = 60
+    BoardWeight = 3
+    MaxWeight = 10
+    LeftStandPos = -3
+    RightStandPos = -1
+
     @staticmethod
-    def INIT_State(board_len, max_weight_block):
-        game = NoTippingGame(board_len, max_weight_block)
-        game.board_state = [None] * (board_len + 1)
-        game.put_on_index(-4, 3)
-        return game
+    def INIT_State(max_weight_block, board_len=60):
+        NoTippingGame.MaxWeight = max_weight_block
+        NoTippingGame.BoardLen = board_len
+        left = NoTippingGame.cal_left_torque(0, NoTippingGame.BoardWeight)
+        right = NoTippingGame.cal_right_torque(0, NoTippingGame.BoardWeight)
 
-    def __init__(self, board_len, max_weight_block):
-        self.board_len = board_len
-        self.max_weight_block = max_weight_block
-        # TODO: refine use int
-        self.board_state = None
-        self.left_stand = -3
-        self.right_stand = -1
-        self.board_weight = 3
+        init_pos = -4
+        init_idx = pos_2_idx(init_pos)
+        init_weight = 3
+        left += NoTippingGame.cal_left_torque(init_pos, init_weight)
+        right += NoTippingGame.cal_right_torque(init_pos, init_weight)
 
-    def put_on_index(self, idx, val):
-        real_idx = self.to_array_idx(idx)
-        self.board_state[real_idx] = val
+        init_board = np.uint64((0b1 << (NoTippingGame.BoardLen+1))-1)
+        mask = ~np.uint64(0b1 << init_idx)
+        init_board = init_board & mask
 
-    def to_array_idx(self, idx):
-        mid = self.board_len // 2
-        a_idx = mid + idx
-        return a_idx
+        black_state = np.uint64((0b1 << NoTippingGame.MaxWeight)-1)
+        white_state = np.uint64((0b1 << NoTippingGame.MaxWeight)-1)
 
-    def to_board_idx(self, idx):
-        mid = self.board_len // 2
-        return idx - mid
+        return NoTippingGame(init_board, left, right, black_state, white_state)
 
-    def left_torque(self):
-        if self.board_state is None:
-            return 0
-        stand_idx = self.to_array_idx(self.left_stand)
-        mid_idx = self.to_array_idx(0)
-        total_t = (stand_idx - mid_idx)*self.board_weight
-        for idx, elem in enumerate(self.board_state):
-            if elem is None:
-                continue
-            torque = (stand_idx - idx)*elem
-            total_t += torque
-        return total_t
+    def __init__(self, board_move_bit, left_torque, right_torque, black_state, white_state):
+        self.curr_left_torque = left_torque
+        self.curr_right_torque = right_torque
+        self.black_state = black_state
+        self.white_state = white_state
+        self.board_available_move = board_move_bit
 
-    def right_torque(self):
-        if self.board_state is None:
-            return 0
-        stand_idx = self.to_array_idx(self.right_stand)
-        mid_idx = self.to_array_idx(0)
-        total_t = (stand_idx - mid_idx)*self.board_weight
-        for idx, elem in enumerate(self.board_state):
-            if elem is None:
-                continue
-            torque = (stand_idx - idx)*elem
-            total_t += torque
-        return total_t
+    @staticmethod
+    def cal_left_torque(pos, weight):
+        return weight * (NoTippingGame.LeftStandPos - pos)
+
+    @staticmethod
+    def cal_right_torque(pos, weight):
+        return weight * (NoTippingGame.RightStandPos - pos)
 
     def __str__(self):
-        return "left: {} right: {}".format(self.left_torque(), self.right_torque())
+        return "left: {} right: {}".format(self.curr_left_torque, self.curr_right_torque)
+
+    def get_legal_idxs(self):
+        # idxs = []
+        # for i in range(NoTippingGame.BoardLen+1):
+        #     mask = np.uint64(0b1 << i)
+        #     if mask & self.board_available_move:
+        #         idxs.append(i)
+        # return idxs
+        return bit_to_1d_array(self.board_available_move, NoTippingGame.BoardLen+1)
+
+    def is_terminal(self):
+        return self.curr_left_torque > 0 or self.curr_right_torque < 0
+
+    def take_move(self, player, pos, weight):
+        self_state = self.black_state
+        rival_state = self.white_state
+        if player == Player.WHITE:
+            self_state = self.white_state
+            rival_state = self.black_state
+        new_left = self.curr_left_torque + NoTippingGame.cal_left_torque(pos, weight)
+        new_right = self.curr_right_torque + NoTippingGame.cal_right_torque(pos, weight)
+        idx = pos_2_idx(pos)
+        mask = ~np.uint64(0b1 << idx)
+        new_board = self.board_available_move & mask
+
+        weight_mask = ~np.uint64(0b1 << (weight-1))
+        self_state = self_state & weight_mask
+        if player == Player.BLACK:
+            return NoTippingGame(new_board, new_left, new_right, self_state, rival_state)
+        else:
+            return NoTippingGame(new_board, new_left, new_right, rival_state, self_state)
+
+
+class GameState:
+    @staticmethod
+    def INIT_State(max_weight_block, board_len=60):
+        nt_game = NoTippingGame.INIT_State(max_weight_block, board_len)
+        return GameState(nt_game, Player.BLACK)
+
+    def __init__(self, game: NoTippingGame, to_play: Player):
+        self.game = game
+        self.to_play = to_play
+
+    def take(self, pos, weight):
+        new_nt = self.game.take_move(self.to_play, pos, weight)
+        return GameState(new_nt, self.to_play.rival())
+
+    def remove(self, pos):
+        # TODO: take thii
+        pass
+
+    @property
+    def is_terminal(self):
+        return self.game.is_terminal()
+
+    def winner(self):
+        if self.is_terminal:
+            return self.to_play
+        return None
+
+    @property
+    def to_play_factor(self):
+        if self.to_play == Player.BLACK:
+            return 1
+        else:
+            return -1
+
+    def need_pass(self):
+        return False
+
+    def __str__(self):
+        return self.game.__str__()
 
 
 if __name__ == '__main__':
-    game = NoTippingGame.INIT_State(60, 10)
-    game.put_on_index(-1, 10)
-    game.put_on_index(-6, 8)
+    game = NoTippingGame.INIT_State(4, 10)
+    print(game.get_legal_idxs())
     print(game)
+
+    state = GameState.INIT_State(4, 10)
+    state = state.take(-2, 4)
+    state = state.take(0, 3)
+    state = state.take(-3, 1)
+    state = state.take(-1, 1)
+    state = state.take(-5, 3)
+    state = state.take(1, 4)
+    state = state.take(2, 2)
+    print(state.is_terminal)
+    state = state.take(4, 2)
+    print(state.is_terminal)
+    print(state.game.get_legal_idxs())
+    print(state)
