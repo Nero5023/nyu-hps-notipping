@@ -27,6 +27,11 @@ def pos_2_idx(pos):
     return pos + mid
 
 
+def idx_2_pos(idx):
+    mid = NoTippingGame.BoardLen//2
+    return idx - mid
+
+
 def bit_to_1d_array(bit, size):
     return np.array(list(reversed((("0" * size) + bin(bit)[2:])[-size:])), dtype=np.uint8)
 
@@ -90,6 +95,15 @@ class NoTippingGame:
         #         idxs.append(i)
         # return idxs
         return bit_to_1d_array(self.board_available_move, NoTippingGame.BoardLen+1)
+
+    def bit_state(self, player: Player):
+        if player == Player.BLACK:
+            return self.black_state
+        else:
+            return self.white_bit
+
+    def get_legal_weights(self):
+
 
     def is_terminal(self):
         return self.curr_left_torque > 0 or self.curr_right_torque < 0
@@ -191,6 +205,47 @@ class GameState:
     def __str__(self):
         return self.game.__str__()
 
+    def self_rival_state(self):
+        if self.to_play == Player.BLACK:
+            return self.game.black_state, self.game.white_state
+        else:
+            return self.game.white_state, self.game.black_state
+
+    def to_state(self):
+        self_s, rival_s = self.self_rival_state()
+        return self_s, rival_s, self.game.board_available_move, self.game.curr_left_torque, self.game.curr_right_torque
+
+    def legal_poss(self):
+        l_idxs = self.game.get_legal_idxs()
+        res = []
+        for idx, val in enumerate(l_idxs):
+            if val == 0:
+                continue
+            res.append(idx_2_pos(idx))
+        return res
+
+    def self_legal_weight(self):
+        pass
+
+def can_win(game_state: GameState, cache):
+    tuple_state = game_state.to_state()
+    if tuple_state in cache:
+        return cache[tuple_state]
+    if game_state.is_terminal:
+        return True
+
+    for legal_pos in game_state.legal_poss():
+        for weight in game_state.self_legal_weight():
+            if game_state.will_loss_put_at(legal_pos, weight):
+                continue
+            new_game_s = game_state.take(legal_pos, weight)
+            rival_can_win = can_win(new_game_s, cache)
+            if not rival_can_win:
+                cache[tuple_state] = True
+                return True
+    cache[tuple_state] = False
+    return False
+
 
 if __name__ == '__main__':
     game = NoTippingGame.INIT_State(4, 10)
@@ -204,10 +259,19 @@ if __name__ == '__main__':
     state = state.take(-1, 1)
     state = state.take(-5, 3)
     state = state.take(1, 4)
+    print(state)
     state = state.take(2, 2)
-    print(state.is_terminal)
+    print(state)
     state = state.take(4, 2)
     print(state.game.board_state)
     print(state.is_terminal)
     print(state.game.get_legal_idxs())
+    print(state)
+
+    state = state.remove(4)
+    print(state.game.board_state)
+    print(state)
+
+    state = state.remove(2)
+    print(state.game.board_state)
     print(state)
