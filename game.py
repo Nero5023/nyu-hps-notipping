@@ -100,13 +100,23 @@ class NoTippingGame:
         if player == Player.BLACK:
             return self.black_state
         else:
-            return self.white_bit
+            return self.white_state
 
-    def get_legal_weights(self):
-
+    def get_legal_weights(self, player: Player):
+        return bit_to_1d_array(self.bit_state(player), NoTippingGame.MaxWeight)
 
     def is_terminal(self):
         return self.curr_left_torque > 0 or self.curr_right_torque < 0
+
+    def check_if_move_will_success(self, pos, weight):
+        # self_state = self.black_state
+        # rival_state = self.white_state
+        # if player == Player.WHITE:
+        #     self_state = self.white_state
+        #     rival_state = self.black_state
+        new_left = self.curr_left_torque + NoTippingGame.cal_left_torque(pos, weight)
+        new_right = self.curr_right_torque + NoTippingGame.cal_right_torque(pos, weight)
+        return new_left <= 0 and new_right <= 0
 
     def take_move(self, player, pos, weight):
         self_state = self.black_state
@@ -225,7 +235,19 @@ class GameState:
         return res
 
     def self_legal_weight(self):
-        pass
+        array = self.game.get_legal_weights(self.to_play)
+        return list(np.where(array == 1)[0] + 1)
+
+    def if_success_put_at(self, pos, weight):
+        return self.game.check_if_move_will_success(pos, weight)
+
+    def get_legal_move_tuple(self):
+        moves = []
+        for pos in self.legal_poss():
+            for weight in self.self_legal_weight():
+                moves.append((pos, weight))
+        return moves
+
 
 def can_win(game_state: GameState, cache):
     tuple_state = game_state.to_state()
@@ -236,7 +258,7 @@ def can_win(game_state: GameState, cache):
 
     for legal_pos in game_state.legal_poss():
         for weight in game_state.self_legal_weight():
-            if game_state.will_loss_put_at(legal_pos, weight):
+            if game_state.if_success_put_at(legal_pos, weight):
                 continue
             new_game_s = game_state.take(legal_pos, weight)
             rival_can_win = can_win(new_game_s, cache)
