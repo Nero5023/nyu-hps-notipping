@@ -273,7 +273,7 @@ def can_win(game_state: GameState, cache):
     return False
 
 
-def Max(state: GameState, cache):
+def Max(state: GameState, alpha, beta, cache):
     if state.is_board_flip:
         return 1
     if state.is_no_weights():
@@ -284,9 +284,14 @@ def Max(state: GameState, cache):
     best = float('-inf')
     for pos, weight in state.get_legal_success_move():
         new_state = state.take(pos, weight)
-        val = Min(new_state, cache)
+        val = Min(new_state, alpha, beta, cache)
         if val > best:
             best = val
+        if val >= beta:
+            cache[state_id] = best
+            return best
+        if val > alpha:
+            alpha = val
         if best == 1:
             cache[state_id] = best
             return 1
@@ -294,7 +299,7 @@ def Max(state: GameState, cache):
     return best
 
 
-def Min(state: GameState, cache):
+def Min(state: GameState, alpha, beta, cache):
     if state.is_board_flip:
         return -1
     if state.is_no_weights():
@@ -305,9 +310,14 @@ def Min(state: GameState, cache):
     best = float('inf')
     for pos, weight in state.get_legal_success_move():
         new_state = state.take(pos, weight)
-        val = Max(new_state, cache)
+        val = Max(new_state, alpha, beta, cache)
         if val < best:
             best = val
+        if val <= alpha:
+            cache[state_id] = best
+            return best
+        if val < beta:
+            beta = val
         if best == -1:
             cache[state_id] = best
             return best
@@ -316,7 +326,7 @@ def Min(state: GameState, cache):
 
 
 if __name__ == '__main__':
-    game = NoTippingGame.INIT_State(4, 10)
+    # game = NoTippingGame.INIT_State(4, 10)
     # print(game.get_legal_idxs())
     # print(game)
     #
@@ -344,17 +354,18 @@ if __name__ == '__main__':
     # print(state.game.board_state)
     # print(state)
 
-    state = GameState.INIT_State(4, 10)
+    state = GameState.INIT_State(4, 30)
     cache = {}
     start = time.time()
-    print(Max(state, cache))
+    print(Max(state, float('-inf'), float('inf'), cache))
     print(time.time() - start)
     print(1)
 
     state_iter = state
     while not state_iter.is_terminal():
         if state_iter.to_play == Player.BLACK:
-            val = Max(state_iter, cache)
+            print("Player1 state: {}".format(state_iter.to_state()))
+            val = Max(state_iter, float('-inf'), float('inf'), cache)
             if val <= -1:
                 move_tuples = state_iter.get_legal_success_move()
                 if len(move_tuples) == 0:
@@ -367,12 +378,13 @@ if __name__ == '__main__':
             target_val = val
             for pos, weight in state_iter.get_legal_move_tuple():
                 new_state = state_iter.take(pos, weight)
-                if Min(new_state, cache) == target_val:
+                if Min(new_state, float('-inf'), float('inf'), cache) == target_val:
                     state_iter = new_state
                     print("Player1: {} {}".format(pos, weight))
                     break
         else:
-            val = Min(state_iter, cache)
+            val = Min(state_iter, float('-inf'), float('inf'), cache)
+            print("Player2 state: {}".format(state_iter.to_state()))
             if val >= 1:
                 move_tuples = state_iter.get_legal_success_move()
                 if len(move_tuples) == 0:
@@ -382,9 +394,10 @@ if __name__ == '__main__':
                 print("Player2: {} {}".format(pos, weight))
                 continue
             target_val = val
+            # print(len(state_iter.get_legal_success_move()))
             for pos, weight in state_iter.get_legal_move_tuple():
                 new_state = state_iter.take(pos, weight)
-                if Max(new_state, cache) == target_val:
+                if Max(new_state, float('-inf'), float('inf'), cache) == target_val:
                     state_iter = new_state
                     print("Player2: {} {}".format(pos, weight))
                     break
