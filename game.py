@@ -115,7 +115,7 @@ class NoTippingGame:
         #     rival_state = self.black_state
         new_left = self.curr_left_torque + NoTippingGame.cal_left_torque(pos, weight)
         new_right = self.curr_right_torque + NoTippingGame.cal_right_torque(pos, weight)
-        return new_left <= 0 and new_right <= 0
+        return new_left <= 0 and new_right >= 0
 
     def take_move(self, player, pos, weight):
         self_state = self.black_state
@@ -242,6 +242,16 @@ class GameState:
                 moves.append((pos, weight))
         return moves
 
+    def get_legal_success_move(self):
+        moves = []
+        for pos in self.legal_poss():
+            for weight in self.self_legal_weight():
+                if self.if_success_put_at(pos, weight):
+                    moves.append((pos, weight))
+                # moves.append((pos, weight))
+        # print(len(moves))
+        return moves
+
 
 def can_win(game_state: GameState, cache):
     tuple_state = game_state.to_state()
@@ -272,7 +282,7 @@ def Max(state: GameState, cache):
     if state_id in cache:
         return cache[state_id]
     best = float('-inf')
-    for pos, weight in state.get_legal_move_tuple():
+    for pos, weight in state.get_legal_success_move():
         new_state = state.take(pos, weight)
         val = Min(new_state, cache)
         if val > best:
@@ -293,7 +303,7 @@ def Min(state: GameState, cache):
     if state_id in cache:
         return cache[state_id]
     best = float('inf')
-    for pos, weight in state.get_legal_move_tuple():
+    for pos, weight in state.get_legal_success_move():
         new_state = state.take(pos, weight)
         val = Max(new_state, cache)
         if val < best:
@@ -345,8 +355,10 @@ if __name__ == '__main__':
     while not state_iter.is_terminal():
         if state_iter.to_play == Player.BLACK:
             val = Max(state_iter, cache)
-            if val == -1:
-                move_tuples = state_iter.get_legal_move_tuple()
+            if val <= -1:
+                move_tuples = state_iter.get_legal_success_move()
+                if len(move_tuples) == 0:
+                    move_tuples = state_iter.get_legal_move_tuple()
                 print(len(move_tuples))
                 pos, weight = random.choice(move_tuples)
                 state_iter = state_iter.take(pos, weight)
@@ -361,8 +373,10 @@ if __name__ == '__main__':
                     break
         else:
             val = Min(state_iter, cache)
-            if val == 1:
-                move_tuples = state_iter.get_legal_move_tuple()
+            if val >= 1:
+                move_tuples = state_iter.get_legal_success_move()
+                if len(move_tuples) == 0:
+                    move_tuples = state_iter.get_legal_move_tuple()
                 pos, weight = random.choice(move_tuples)
                 state_iter = state_iter.take(pos, weight)
                 print("Player2: {} {}".format(pos, weight))
