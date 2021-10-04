@@ -269,31 +269,73 @@ def can_win(game_state: GameState, cache):
     return False
 
 
+def Max(state: GameState, cache):
+    if state.is_terminal:
+        return 1
+    state_id = state.to_state()
+    if state_id in cache:
+        return cache[state_id]
+    best = float('-inf')
+    for pos, weight in state.get_legal_move_tuple():
+        new_state = state.take(pos, weight)
+        val = Min(new_state, cache)
+        if val > best:
+            best = val
+        if best == 1:
+            cache[state_id] = best
+            return 1
+    cache[state_id] = best
+    return best
+
+
+def Min(state: GameState, cache):
+    if state.is_terminal:
+        return -1
+    state_id = state.to_state()
+    if state_id in cache:
+        return cache[state_id]
+    best = float('inf')
+    for pos, weight in state.get_legal_move_tuple():
+        new_state = state.take(pos, weight)
+        val = Max(new_state, cache)
+        if val < best:
+            best = val
+        if best == -1:
+            cache[state_id] = best
+            return best
+    cache[state_id] = best
+    return best
+
 if __name__ == '__main__':
     game = NoTippingGame.INIT_State(4, 10)
-    print(game.get_legal_idxs())
-    print(game)
+    # print(game.get_legal_idxs())
+    # print(game)
+    #
+    # state = GameState.INIT_State(4, 10)
+    # state = state.take(-2, 4)
+    # state = state.take(0, 3)
+    # state = state.take(-3, 1)
+    # state = state.take(-1, 1)
+    # state = state.take(-5, 3)
+    # state = state.take(1, 4)
+    # print(state)
+    # state = state.take(2, 2)
+    # print(state)
+    # state = state.take(4, 2)
+    # print(state.game.board_state)
+    # print(state.is_terminal)
+    # print(state.game.get_legal_idxs())
+    # print(state)
+    #
+    # state = state.remove(4)
+    # print(state.game.board_state)
+    # print(state)
+    #
+    # state = state.remove(2)
+    # print(state.game.board_state)
+    # print(state)
 
     state = GameState.INIT_State(4, 10)
-    state = state.take(-2, 4)
-    state = state.take(0, 3)
-    state = state.take(-3, 1)
-    state = state.take(-1, 1)
-    state = state.take(-5, 3)
-    state = state.take(1, 4)
-    print(state)
-    state = state.take(2, 2)
-    print(state)
-    state = state.take(4, 2)
-    print(state.game.board_state)
-    print(state.is_terminal)
-    print(state.game.get_legal_idxs())
-    print(state)
-
-    state = state.remove(4)
-    print(state.game.board_state)
-    print(state)
-
-    state = state.remove(2)
-    print(state.game.board_state)
-    print(state)
+    cache = {}
+    print(Max(state, cache))
+    print(1)
