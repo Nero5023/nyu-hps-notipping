@@ -3,6 +3,7 @@ import numpy as np
 import math
 import random
 from copy import deepcopy
+import time
 
 
 class Player(Enum):
@@ -64,8 +65,6 @@ class NoTippingGame:
         white_state = np.uint64((0b1 << NoTippingGame.MaxWeight)-1)
 
         game = NoTippingGame(init_board, left, right, black_state, white_state)
-        game.board_state = [None]*(NoTippingGame.BoardLen+1)
-        game.board_state[init_idx] = init_weight
         return game
 
     def __init__(self, board_move_bit, left_torque, right_torque, black_state, white_state):
@@ -74,7 +73,7 @@ class NoTippingGame:
         self.black_state = black_state
         self.white_state = white_state
         self.board_available_move = board_move_bit
-        self.board_state = []
+        # self.board_state = []
 
     @staticmethod
     def cal_left_torque(pos, weight):
@@ -133,28 +132,20 @@ class NoTippingGame:
         weight_mask = ~np.uint64(0b1 << (weight-1))
         self_state = self_state & weight_mask
 
-        copyed_state = deepcopy(self.board_state)
-        copyed_state[idx] = weight
-
         if player == Player.BLACK:
             game = NoTippingGame(new_board, new_left, new_right, self_state, rival_state)
-            game.board_state = copyed_state
             return game
         else:
             game = NoTippingGame(new_board, new_left, new_right, rival_state, self_state)
-            game.board_state = copyed_state
             return game
 
     def remove(self, player, pos):
         idx = pos_2_idx(pos)
-        if self.board_state[idx] is None:
-            return None
         self_state = self.black_state
         rival_state = self.white_state
         if player == Player.WHITE:
             self_state = self.white_state
             rival_state = self.black_state
-        weight = self.board_state[idx]
         new_left = self.curr_left_torque - NoTippingGame.cal_left_torque(pos, weight)
         new_right = self.curr_right_torque - NoTippingGame.cal_right_torque(pos, weight)
         mask = np.uint64(0b1 << idx)
@@ -163,17 +154,13 @@ class NoTippingGame:
         weight_mask = np.uint64(0b1 << (weight - 1))
         self_state = self_state | weight_mask
 
-        copyed_state = deepcopy(self.board_state)
-        copyed_state[idx] = None
-
         if player == Player.BLACK:
             game = NoTippingGame(new_board, new_left, new_right, self_state, rival_state)
-            game.board_state = copyed_state
             return game
         else:
             game = NoTippingGame(new_board, new_left, new_right, rival_state, self_state)
-            game.board_state = copyed_state
             return game
+
 
 class GameState:
     @staticmethod
@@ -317,6 +304,7 @@ def Min(state: GameState, cache):
     cache[state_id] = best
     return best
 
+
 if __name__ == '__main__':
     game = NoTippingGame.INIT_State(4, 10)
     # print(game.get_legal_idxs())
@@ -346,9 +334,11 @@ if __name__ == '__main__':
     # print(state.game.board_state)
     # print(state)
 
-    state = GameState.INIT_State(4, 8)
+    state = GameState.INIT_State(4, 10)
     cache = {}
+    start = time.time()
     print(Max(state, cache))
+    print(time.time() - start)
     print(1)
 
     state_iter = state
