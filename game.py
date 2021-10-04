@@ -105,7 +105,7 @@ class NoTippingGame:
     def get_legal_weights(self, player: Player):
         return bit_to_1d_array(self.bit_state(player), NoTippingGame.MaxWeight)
 
-    def is_terminal(self):
+    def is_board_flip(self):
         return self.curr_left_torque > 0 or self.curr_right_torque < 0
 
     def check_if_move_will_success(self, pos, weight):
@@ -193,12 +193,19 @@ class GameState:
         new_nt = self.game.remove(self.to_play, pos)
         return GameState(new_nt, self.to_play.rival())
 
+    # check if board flip
     @property
+    def is_board_flip(self):
+        return self.game.is_board_flip()
+
     def is_terminal(self):
-        return self.game.is_terminal()
+        return self.is_board_flip or self.is_no_weights()
+
+    def is_no_weights(self):
+        return self.game.bit_state(self.to_play) == 0
 
     def winner(self):
-        if self.is_terminal:
+        if self.is_board_flip:
             return self.to_play
         return None
 
@@ -253,7 +260,7 @@ def can_win(game_state: GameState, cache):
     tuple_state = game_state.to_state()
     if tuple_state in cache:
         return cache[tuple_state]
-    if game_state.is_terminal:
+    if game_state.is_board_flip:
         return True
 
     for legal_pos in game_state.legal_poss():
@@ -270,8 +277,10 @@ def can_win(game_state: GameState, cache):
 
 
 def Max(state: GameState, cache):
-    if state.is_terminal:
+    if state.is_board_flip:
         return 1
+    if state.is_no_weights():
+        return 0
     state_id = state.to_state()
     if state_id in cache:
         return cache[state_id]
@@ -289,8 +298,10 @@ def Max(state: GameState, cache):
 
 
 def Min(state: GameState, cache):
-    if state.is_terminal:
+    if state.is_board_flip:
         return -1
+    if state.is_no_weights():
+        return 0
     state_id = state.to_state()
     if state_id in cache:
         return cache[state_id]
@@ -335,7 +346,42 @@ if __name__ == '__main__':
     # print(state.game.board_state)
     # print(state)
 
-    state = GameState.INIT_State(4, 10)
+    state = GameState.INIT_State(4, 8)
     cache = {}
     print(Max(state, cache))
     print(1)
+
+    state_iter = state
+    while not state_iter.is_terminal():
+        if state_iter.to_play == Player.BLACK:
+            val = Max(state_iter, cache)
+            if val == -1:
+                move_tuples = state_iter.get_legal_move_tuple()
+                print(len(move_tuples))
+                pos, weight = random.choice(move_tuples)
+                state_iter = state_iter.take(pos, weight)
+                print("Player1: {} {}".format(pos, weight))
+                continue
+            target_val = val
+            for pos, weight in state_iter.get_legal_move_tuple():
+                new_state = state_iter.take(pos, weight)
+                if Min(new_state, cache) == target_val:
+                    state_iter = new_state
+                    print("Player1: {} {}".format(pos, weight))
+                    break
+        else:
+            val = Min(state_iter, cache)
+            if val == 1:
+                move_tuples = state_iter.get_legal_move_tuple()
+                pos, weight = random.choice(move_tuples)
+                state_iter = state_iter.take(pos, weight)
+                print("Player2: {} {}".format(pos, weight))
+                continue
+            target_val = val
+            for pos, weight in state_iter.get_legal_move_tuple():
+                new_state = state_iter.take(pos, weight)
+                if Max(new_state, cache) == target_val:
+                    state_iter = new_state
+                    print("Player2: {} {}".format(pos, weight))
+                    break
+    print(state_iter.winner())
