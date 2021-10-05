@@ -6,6 +6,7 @@ from time import sleep
 import argparse
 from game import idx_2_pos, pos_2_idx
 from game import PutPlayer
+from remove_game import RemovePlayer
 
 HOST = 'localhost'
 PORT = 5000
@@ -27,6 +28,7 @@ class NoTippingClient(object):
         self.num_weights = response['num_weights']
 
         self.put_player = PutPlayer(self.num_weights)
+        self.remove_player = None
 
         self.last_board = [0]*61
         self.last_board[pos_2_idx(-4)] = 3
@@ -118,20 +120,44 @@ class NoTippingClient(object):
         Output:
         position (Integer)
         """
-        allPossiblePosition = []
-        for i in range(0, 61):
-            if self.board_state[i] != 0:
-                tempWeight = self.board_state[i]
-                self.board_state[i] = 0
-                if self.check_balance(self.board_state):
-                    allPossiblePosition.append(i - 30)
-                self.board_state[i] = tempWeight
-        if len(allPossiblePosition) == 0:
-            choice = 1
-        else:
-            choice = random.choice(allPossiblePosition)
-        print("Removed:" + str(choice))
-        return choice
+        if self.remove_player is None:
+            if not self.put_player.state.is_terminal():
+                # first play
+                pos, weight = self.check_rival_move(board_state)
+                self.last_board[pos_2_idx(pos)] = weight
+                self.put_player.take_move(pos, weight)
+                self.remove_player = RemovePlayer(board_state[:], self.put_player.state.game.board_available_move)
+            else:
+                # second play
+                self.remove_player = RemovePlayer(board_state[:], self.put_player.state.game.board_available_move)
+        pos, _ = self.check_rival_move(board_state)
+        print("Rival remove: {}".format(pos))
+        if pos is not None:
+            self.remove_player.take_move(pos)
+            self.last_board[pos_2_idx(pos)] = 0
+
+        pos = self.remove_player.pick_move()
+        self.remove_player.take_move(pos)
+        self.last_board[pos_2_idx(pos)] = 0
+        print("Self remove: {}".format(pos))
+
+        return pos
+
+
+        # allPossiblePosition = []
+        # for i in range(0, 61):
+        #     if self.board_state[i] != 0:
+        #         tempWeight = self.board_state[i]
+        #         self.board_state[i] = 0
+        #         if self.check_balance(self.board_state):
+        #             allPossiblePosition.append(i - 30)
+        #         self.board_state[i] = tempWeight
+        # if len(allPossiblePosition) == 0:
+        #     choice = 1
+        # else:
+        #     choice = random.choice(allPossiblePosition)
+        # print("Removed:" + str(choice))
+        # return choice
 
     def check_balance(self, board_state):
         left_torque = 0
@@ -163,7 +189,7 @@ if __name__ == '__main__':
     parser.add_argument('--slow', action='store_true', default=False)
     parser.add_argument('--ip', type=str, default='localhost')
     parser.add_argument('--port', type=int, default=5000)
-    parser.add_argument('--name', type=str, default="Random Client")
+    parser.add_argument('--name', type=str, default="Team Z")
 
     args = parser.parse_args()
 

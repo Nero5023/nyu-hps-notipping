@@ -4,7 +4,7 @@ import math
 import random
 from copy import deepcopy
 import time
-
+from functools import cmp_to_key
 
 class Player(Enum):
     BLACK = 0
@@ -21,6 +21,24 @@ class Player(Enum):
             return Player.BLACK
         else:
             return Player.WHITE
+
+
+def cmp_pos_weight(a, b):
+    pos_a, wei_a = a
+    pos_b, wei_b = b
+    if wei_a > wei_b:
+        return -1
+    if wei_a < wei_b:
+        return 1
+    # wei_a wei_b:
+    mid_pos = -2
+    dis_a = abs(mid_pos-pos_a)
+    dis_b = abs(mid_pos-pos_b)
+    if dis_a > dis_b:
+        return -1
+    if dis_a < dis_b:
+        return 1
+    return 0
 
 
 def pos_2_idx(pos):
@@ -242,7 +260,7 @@ class GameState:
                 moves.append((pos, weight))
         return moves
 
-    def get_legal_success_move(self):
+    def get_legal_success_move(self, sorted=False):
         moves = []
         for pos in self.legal_poss():
             for weight in self.self_legal_weight():
@@ -250,6 +268,8 @@ class GameState:
                     moves.append((pos, weight))
                 # moves.append((pos, weight))
         # print(len(moves))
+        if sorted:
+            moves.sort(key=cmp_to_key(cmp_pos_weight), reverse=True)
         return moves
 
 
@@ -281,20 +301,20 @@ def Max(state: GameState, alpha, beta, cache):
     state_id = state.to_state()
     if state_id in cache:
         return cache[state_id]
-    best = float('-inf')
-    for pos, weight in state.get_legal_success_move():
+    best = -1
+    for pos, weight in state.get_legal_success_move(True):
         new_state = state.take(pos, weight)
         val = Min(new_state, alpha, beta, cache)
         if val > best:
             best = val
-        if val >= beta:
-            cache[state_id] = best
-            return best
-        if val > alpha:
-            alpha = val
         if best == 1:
             cache[state_id] = best
             return 1
+        if val >= beta:
+            # cache[state_id] = beta
+            return beta
+        if val > alpha:
+            alpha = val
     cache[state_id] = best
     return best
 
@@ -307,25 +327,94 @@ def Min(state: GameState, alpha, beta, cache):
     state_id = state.to_state()
     if state_id in cache:
         return cache[state_id]
-    best = float('inf')
-    for pos, weight in state.get_legal_success_move():
+    best = 1
+    for pos, weight in state.get_legal_success_move(True):
         new_state = state.take(pos, weight)
         val = Max(new_state, alpha, beta, cache)
         if val < best:
             best = val
-        if val <= alpha:
-            cache[state_id] = best
-            return best
-        if val < beta:
-            beta = val
         if best == -1:
             cache[state_id] = best
             return best
+        if val <= alpha:
+            # cache[state_id] = alpha
+            return alpha
+        if val < beta:
+            beta = val
     cache[state_id] = best
     return best
 
 
+def alphabeta(state: GameState, alpha, beta, cache):
+    if state.is_board_flip:
+        if state.to_play == Player.BLACK:
+            return 1
+        else:
+            return -1
+    if state.is_no_weights():
+        return 0
+    state_id = state.to_state()
+    if state.to_play == Player.BLACK:
+        v = float('-inf')
+        for pos, weight in state.get_legal_success_move(True):
+            new_state = state.take(pos, weight)
+            v = max(v, alphabeta(new_state, alpha, beta, cache))
+            if v == 1:
+                break
+            alpha = max(alpha, v)
+            if beta <= alpha:
+                return v
+        cache[state_id] = v
+        return v
+    else:
+        v = float('inf')
+        for pos, weight in state.get_legal_success_move(True):
+            new_state = state.take(pos, weight)
+            v = min(v, alphabeta(new_state, alpha, beta, cache))
+            if v == -1:
+                break
+            beta = min(beta, v)
+            if beta <= alpha:
+                return v
+        cache[state_id] = v
+        return v
+
+
+class PutPlayer:
+    def __init__(self, k):
+        self.state = GameState.INIT_State(k, 60)
+        self.cache = {}
+
+    def pick_move(self):
+        move_tuples = self.state.get_legal_success_move(True)
+        if len(move_tuples) == 0:
+            return None
+        return move_tuples[0]
+
+    def take_move(self, pos, weight):
+        self.state = self.state.take(pos, weight)
+
+
 if __name__ == '__main__':
+    # k = 12
+    # game = GameState.INIT_State(k, 60)
+    # player = PutPlayer(k)
+    #
+    # positions = [None]*61
+    # positions[pos_2_idx(-4)] = 3
+    # while not game.is_terminal():
+    #     pos, weight = player.pick_move()
+    #     print("{} {}".format(pos, weight))
+    #     player.take_move(pos, weight)
+    #     game = game.take(pos, weight)
+    #     positions[pos_2_idx(pos)] = weight
+    # print(positions)
+    # print(game.game.board_available_move)
+    # print(game.winner())
+
+
+
+
     # game = NoTippingGame.INIT_State(4, 10)
     # print(game.get_legal_idxs())
     # print(game)
@@ -354,10 +443,14 @@ if __name__ == '__main__':
     # print(state.game.board_state)
     # print(state)
 
-    state = GameState.INIT_State(4, 30)
+    state = GameState.INIT_State(4, 60)
+    start = time.time()
+    print(alphabeta(state, -1, 1, {}))
+    print(time.time() - start)
+
     cache = {}
     start = time.time()
-    print(Max(state, float('-inf'), float('inf'), cache))
+    print(Max(state, -1, 1, cache))
     print(time.time() - start)
     print(1)
 
