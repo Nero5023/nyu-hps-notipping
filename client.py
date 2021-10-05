@@ -29,7 +29,7 @@ class NoTippingClient(object):
         self.put_player = PutPlayer(self.num_weights)
 
         self.last_board = [0]*61
-        self.last_board[pos_2_idx(-4)] = -3
+        self.last_board[pos_2_idx(-4)] = 3
 
         self.myWeight = dict()
         for i in range(1, int(self.num_weights) + 1):
@@ -82,23 +82,33 @@ class NoTippingClient(object):
         position (Integer), weight (Integer)
         """
         rival_pos, rival_weight = self.check_rival_move(board_state)
-        if rival_pos == None:
-            pass
-        else:
+        print("Rival Move: {} {}".format(rival_pos, rival_weight))
+        if rival_pos is not None:
+            self.put_player.take_move(rival_pos, rival_weight)
+            self.last_board[pos_2_idx(rival_pos)] = rival_weight
 
-        allPosition = []
-        for key, value in self.myWeight.items():
-            if value == 1:
-                position = self.find_place_position(key, self.board_state)
-                if position != -100:
-                    allPosition.append((position - 30, key))
-        if len(allPosition) == 0:
-            choice = (0, 1)
-        else:
-            choice = random.choice(allPosition)
-        self.myWeight[choice[1]] = 0
-        print("Added: " + str(choice))
-        return choice[0], choice[1]
+        pos, weight = self.put_player.pick_move()
+
+        self.last_board[pos_2_idx(pos)] = weight
+
+        self.put_player.take_move(pos, weight)
+
+        print("Take move: {} {}".format(pos, weight))
+        return pos, int(weight)
+
+        # allPosition = []
+        # for key, value in self.myWeight.items():
+        #     if value == 1:
+        #         position = self.find_place_position(key, self.board_state)
+        #         if position != -100:
+        #             allPosition.append((position - 30, key))
+        # if len(allPosition) == 0:
+        #     choice = (0, 1)
+        # else:
+        #     choice = random.choice(allPosition)
+        # self.myWeight[choice[1]] = 0
+        # print("Added: " + str(choice))
+        # return choice[0], choice[1]
 
     def remove(self, board_state):
         """
