@@ -6,10 +6,15 @@ from game import idx_2_pos
 from game import Player, bit_to_1d_array
 import numpy as np
 import random
+from remove_inplace import Simulation
 
+max_time = 0
+
+MAX_MOVE = 61
 
 class NoTippingRemoveGame:
     BoardState = []
+    MAX_MOVE = 61
     @staticmethod
     def INIT_State(states, state_bit):
         NoTippingRemoveGame.BoardState = states
@@ -17,7 +22,7 @@ class NoTippingRemoveGame:
         right = NoTippingGame.cal_right_torque(0, NoTippingGame.BoardWeight)
 
         num_weight = 0
-        for idx, weight in enumerate(state):
+        for idx, weight in enumerate(states):
             if weight is None or weight == 0:
                 continue
             num_weight += 1
@@ -126,13 +131,13 @@ class RemoveGameState:
                 if not self.game.will_success_remove(pos):
                     actions[idx] = 0
 
-        if sum(actions) == 0:
-            return self.game.get_legal_actions()
+        # if sum(actions) == 0:
+        #     return self.game.get_legal_actions()
         return actions
 
     @property
     def is_terminal(self):
-        return self.game.is_board_flip or sum(self.get_legal_actions()) == 0
+        return self.game.is_board_flip or sum(self.game.get_legal_actions()) == 0
 
     def winner(self):
         if self.game.is_board_flip:
@@ -143,6 +148,7 @@ class RemoveGameState:
     def is_board_flip(self):
         return self.game.is_board_flip
 
+    @property
     def to_play_factor(self):
         if self.to_play == Player.BLACK:
             return 1
@@ -158,20 +164,41 @@ class RemoveGameState:
         for idx, val in enumerate(idxs):
             if val == 1:
                 poss.append(idx_2_pos(idx))
+        # print(poss)
         return poss
 
     def legal_pos(self):
-        idxs = self.get_legal_actions()
+        idxs = self.game.get_legal_actions()
         poss = []
         for idx, val in enumerate(idxs):
-            poss.append(idx_2_pos(idx))
+            if val == 1:
+                poss.append(idx_2_pos(idx))
         return poss
 
     def to_state(self):
         return self.game.state_bit
 
+    def winner_score(self):
+        if self.winner() == Player.BLACK:
+            return 1
+        elif self.winner() == Player.WHITE:
+            return -1
+        else:
+            return 0
+
+    def simulate_winner_score(self):
+        state = [0]*61
+        for idx, val in enumerate(self.game.get_legal_actions()):
+            if val == 1:
+                state[idx] = NoTippingRemoveGame.BoardState[idx]
+
+        s = Simulation(state, self.game.state_bit, self.to_play)
+        return s.simulation_winner_score()
+
 
 def Max(state: RemoveGameState, alpha, beta, cache):
+    global max_time
+    max_time += 1
     if state.is_board_flip:
         return 1
     if state.is_terminal:
@@ -193,6 +220,7 @@ def Max(state: RemoveGameState, alpha, beta, cache):
         if val > alpha:
             alpha = val
     cache[state_id] = best
+    # print(best)
     return best
 
 
@@ -223,11 +251,15 @@ def Min(state: RemoveGameState, alpha, beta, cache):
 
 class RemovePlayer:
     def __init__(self, board, board_bit):
+        from mcts import MCTS
+        from remove_inplace import G_CACHE
         self.state = RemoveGameState.INIT_State(board, board_bit)
-        self.cache = {}
+        self.cache = G_CACHE
+        self.mcts = MCTS(board[:], board_bit)
 
     def take_move(self, pos):
         self.state = self.state.take_move_pos(pos)
+        self.mcts.take_move(pos_2_idx(pos))
 
     def random_pick(self):
         poss = self.state.legal_success_pos()
@@ -237,9 +269,12 @@ class RemovePlayer:
             return random.choice(poss)
 
     def pick_move(self):
-        if len(self.state.game.get_legal_actions()) >= 21:
-            return self.random_pick()
+        if sum(self.state.game.get_legal_actions()) >= 21:
+            self.mcts.search(2000)
+            idx = self.mcts.pick_move()
+            return idx_2_pos(idx)
         else:
+            print("use min max")
             if self.state.to_play == Player.BLACK:
                 val = Max(self.state, -1, 1, self.cache)
                 if val <= -1:
@@ -287,7 +322,7 @@ if __name__ == '__main__':
     # bit = np.uint64(2303591071877169023)
     from game import GameState
     from game import PutPlayer
-    k = 10
+    k = 8
     game = GameState.INIT_State(k, 60)
     player = PutPlayer(k)
 
@@ -304,8 +339,9 @@ if __name__ == '__main__':
     print(game.winner())
     state = positions[:]
     bit = game.game.board_available_move
-
+    print('-----------')
     state = RemoveGameState.INIT_State(state, bit)
     start = time.time()
     print(Max(state, -1, 1, {}))
     print(time.time() - start)
+    print(max_time)

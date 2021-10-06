@@ -141,7 +141,7 @@ class NoTippingClient(object):
         self.last_board[pos_2_idx(pos)] = 0
         print("Self remove: {}".format(pos))
 
-        return pos
+        return int(pos)
 
 
         # allPossiblePosition = []
